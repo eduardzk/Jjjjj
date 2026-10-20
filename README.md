@@ -1,129 +1,30 @@
--- =====================================================
--- TORNADO HUB v4 | Natural Disaster Survival
--- Sem dependência externa | Mobile Ready
--- =====================================================
+Players.LocalPlayer-- =====================================================================
+-- TORNADO HUB v5 (OBSIDIAN UI) | Natural Disaster Survival
+-- Lógica de replicação de física (Network Ownership) e Fly.
+-- =====================================================================
+
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace  = game:GetService("Workspace")
-local UserInput  = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
 local config = {
-    tornado = false, radius = 12, height = 8, speed = 5, maxParts = 100,
+    tornado = false, radius = 15, height = 10, speed = 8, maxParts = 150,
     fly = false, flySpeed = 50, god = false,
 }
 
 local capturedParts = {}
 local flyConn, godConn, angle = nil, nil, 0
+local scanCooldown = 0
+local flyHoldingUp, flyHoldingDown = false, false
 
--- ============ GUI SIMPLES (sem biblioteca) ============
-local sg = Instance.new("ScreenGui")
-sg.Name = "eu amo hitler"
-sg.ResetOnSpawn = false
-sg.Parent = player:WaitForChild("PlayerGui")
-
--- Painel principal
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 260, 0, 360)
-frame.Position = UDim2.new(0, 10, 0.5, -180)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BorderSizePixel = 0
-frame.Active = true
-frame.Draggable = true
-frame.Parent = sg
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = frame
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 32)
-title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Text = "🌪️ Tornado Hub v4"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 15
-title.Parent = frame
-
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 8)
-titleCorner.Parent = title
-
-local function makeButton(text, yPos, color)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(0.9, 0, 0, 34)
-    b.Position = UDim2.new(0.05, 0, 0, yPos)
-    b.BackgroundColor3 = color or Color3.fromRGB(60, 60, 60)
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.Text = text
-    b.Font = Enum.Font.GothamSemibold
-    b.TextSize = 13
-    b.Parent = frame
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 6)
-    c.Parent = b
-    return b
-end
-
-local tornBtn = makeButton("Tornado: OFF", 40, Color3.fromRGB(150, 30, 30))
-local flyBtn  = makeButton("Fly: OFF", 82, Color3.fromRGB(150, 30, 30))
-local godBtn  = makeButton("God: OFF", 124, Color3.fromRGB(150, 30, 30))
-local relBtn  = makeButton("🧹 Soltar Peças", 166, Color3.fromRGB(70, 70, 70))
-
--- Sliders simples (texto + botões +/-)
-local function makeSlider(label, yPos, default, min, max, step, callback)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(0.9, 0, 0, 20)
-    lbl.Position = UDim2.new(0.05, 0, 0, yPos)
-    lbl.BackgroundTransparency = 1
-    lbl.TextColor3 = Color3.new(1, 1, 1)
-    lbl.Text = label .. ": " .. default
-    lbl.Font = Enum.Font.Gotham
-    lbl.TextSize = 12
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = frame
-
-    local val = default
-    local function update()
-        lbl.Text = label .. ": " .. val
-        callback(val)
-    end
-    local minus = Instance.new("TextButton")
-    minus.Size = UDim2.new(0, 30, 0, 20)
-    minus.Position = UDim2.new(0.72, 0, 0, yPos)
-    minus.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    minus.Text = "-"
-    minus.TextColor3 = Color3.new(1, 1, 1)
-    minus.Font = Enum.Font.GothamBold
-    minus.Parent = frame
-
-    local plus = Instance.new("TextButton")
-    plus.Size = UDim2.new(0, 30, 0, 20)
-    plus.Position = UDim2.new(0.86, 0, 0, yPos)
-    plus.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    plus.Text = "+"
-    plus.TextColor3 = Color3.new(1, 1, 1)
-    plus.Font = Enum.Font.GothamBold
-    plus.Parent = frame
-
-    minus.MouseButton1Click:Connect(function()
-        val = math.max(min, val - step); update()
-    end)
-    plus.MouseButton1Click:Connect(function()
-        val = math.min(max, val + step); update()
-    end)
-    update()
-end
-
-makeSlider("Raio", 210, 12, 5, 40, 1, function(v) config.radius = v end)
-makeSlider("Altura", 235, 8, 0, 30, 1, function(v) config.height = v end)
-makeSlider("Velocidade", 260, 5, 1, 20, 0.5, function(v) config.speed = v end)
-makeSlider("Max Peças", 285, 100, 20, 300, 10, function(v) config.maxParts = v end)
-makeSlider("Fly Speed", 310, 50, 10, 150, 5, function(v) config.flySpeed = v end)
-
--- ============ TORNADO ============
+-- =====================================================================
+-- LÓGICA DO TORNADO
+-- =====================================================================
 local function isCharPart(part)
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character and part:IsDescendantOf(p.Character) then return true end
@@ -133,8 +34,11 @@ end
 
 local function attachPart(part)
     if part.Anchored or isCharPart(part) or capturedParts[part] then return false end
+    
     local ok = pcall(function() part:SetNetworkOwner(player) end)
     if not ok then return false end
+
+    part.CanCollide = true
 
     local att = Instance.new("Attachment")
     att.Name = "TornadoAtt"
@@ -146,7 +50,7 @@ local function attachPart(part)
     ap.Attachment0 = att
     ap.MaxForce = math.huge
     ap.MaxVelocity = math.huge
-    ap.Responsiveness = 50
+    ap.Responsiveness = 200
     ap.Parent = part
 
     local ao = Instance.new("AlignOrientation")
@@ -154,7 +58,7 @@ local function attachPart(part)
     ao.Mode = Enum.OrientationAlignmentMode.OneAttachment
     ao.Attachment0 = att
     ao.MaxTorque = math.huge
-    ao.Responsiveness = 50
+    ao.Responsiveness = 200
     ao.Parent = part
 
     capturedParts[part] = true
@@ -178,14 +82,18 @@ RunService.Heartbeat:Connect(function(dt)
     if not hrp then return end
 
     angle = angle + dt * config.speed
-
+    scanCooldown = scanCooldown + dt
     local count = 0
     for _ in pairs(capturedParts) do count = count + 1 end
-    if count < config.maxParts then
+
+    if count < config.maxParts and scanCooldown > 0.5 then
+        scanCooldown = 0
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if count >= config.maxParts then break end
-            if obj:IsA("BasePart") and not obj.Anchored then
-                if attachPart(obj) then count = count + 1 end
+            if obj:IsA("BasePart") and not obj.Anchored and not obj:IsDescendantOf(char) then
+                if not obj:FindFirstChild("TornadoAP") then
+                    if attachPart(obj) then count = count + 1 end
+                end
             end
         end
     end
@@ -203,19 +111,29 @@ RunService.Heartbeat:Connect(function(dt)
             local a = angle + (i / total) * math.pi * 2
             local y = math.sin(a * 2) * config.height + config.height
             local targetPos = hrp.Position + Vector3.new(
-                math.cos(a) * config.radius, y, math.sin(a) * config.radius
+                math.cos(a) * config.radius, 
+                y, 
+                math.sin(a) * config.radius
             )
+            
             local ap = part:FindFirstChild("TornadoAP")
             local ao = part:FindFirstChild("TornadoAO")
-            if ap then ap.Position = targetPos end
-            if ao then ao.CFrame = CFrame.Angles(a, a * 2, 0) end
+            
+            if ap then 
+                ap.Position = targetPos 
+                part.AssemblyLinearVelocity = Vector3.new(math.cos(a)*100, 50, math.sin(a)*100)
+            end
+            
+            if ao then 
+                ao.CFrame = CFrame.Angles(a, a * 2, 0) 
+            end
         end
     end
 end)
 
--- ============ FLY ============
-local flyHoldingUp, flyHoldingDown = false, false
-
+-- =====================================================================
+-- LÓGICA DO FLY E GOD MODE
+-- =====================================================================
 local function startFly()
     local char = player.Character
     if not char then return end
@@ -230,7 +148,7 @@ local function startFly()
 
     local bv = Instance.new("BodyVelocity")
     bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    bv.Velocity = Vector3.new(0, 0, 0)
+    bv.Velocity = Vector3.zero
     bv.Parent = hrp
 
     flyConn = RunService.RenderStepped:Connect(function()
@@ -238,7 +156,7 @@ local function startFly()
         local cam = Workspace.CurrentCamera
         bg.CFrame = cam.CFrame
         local h = char:FindFirstChildOfClass("Humanoid")
-        local move = h and h.MoveDirection * config.flySpeed or Vector3.new(0, 0, 0)
+        local move = h and h.MoveDirection * config.flySpeed or Vector3.zero
         local vy = 0
         if flyHoldingUp then vy = config.flySpeed end
         if flyHoldingDown then vy = -config.flySpeed end
@@ -258,35 +176,6 @@ local function stopFly()
     end
 end
 
--- Botões de subir/descer para mobile
-local upBtn = Instance.new("TextButton")
-upBtn.Size = UDim2.new(0, 60, 0, 60)
-upBtn.Position = UDim2.new(1, -140, 0.5, -70)
-upBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-upBtn.TextColor3 = Color3.new(1, 1, 1)
-upBtn.Text = "⬆️"
-upBtn.Font = Enum.Font.GothamBold
-upBtn.TextSize = 24
-upBtn.Parent = sg
-
-local downBtn = Instance.new("TextButton")
-downBtn.Size = UDim2.new(0, 60, 0, 60)
-downBtn.Position = UDim2.new(1, -140, 0.5, 0)
-downBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-downBtn.TextColor3 = Color3.new(1, 1, 1)
-downBtn.Text = "⬇️"
-downBtn.Font = Enum.Font.GothamBold
-downBtn.TextSize = 24
-downBtn.Parent = sg
-
-upBtn.MouseButton1Down:Connect(function() flyHoldingUp = true end)
-upBtn.MouseButton1Up:Connect(function() flyHoldingUp = false end)
-upBtn.MouseLeave:Connect(function() flyHoldingUp = false end)
-downBtn.MouseButton1Down:Connect(function() flyHoldingDown = true end)
-downBtn.MouseButton1Up:Connect(function() flyHoldingDown = false end)
-downBtn.MouseLeave:Connect(function() flyHoldingDown = false end)
-
--- ============ GOD ============
 local function startGod()
     local char = player.Character
     if not char then return end
@@ -296,6 +185,156 @@ local function startGod()
     h.Health = math.huge
     godConn = h.HealthChanged:Connect(function()
         if config.god then h.Health = math.huge end
+    end)
+end
+
+local function stopGod()
+    if godConn then godConn:Disconnect(); godConn = nil end
+    local char = player.Character
+    if char then
+        local h = char:FindFirstChildOfClass("Humanoid")
+        if h then h.MaxHealth = 100; h.Health = 100 end
+    end
+end
+
+-- =====================================================================
+-- INTERFACE GRÁFICA (OBSIDIAN)
+-- =====================================================================
+local Window = Library:CreateWindow({
+    Title = "Tornado Hub v5",
+    Footer = "Natural Disaster Survival",
+    Icon = 95816097006870,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+local Tabs = {
+    Main = Window:AddTab("Main", "tornado"),
+}
+
+-- Aba do Tornado
+local TornadoGroup = Tabs.Main:AddLeftGroupbox("Tornado")
+
+TornadoGroup:AddToggle("TornadoToggle", {
+    Text = "Ativar Tornado",
+    Default = false,
+    Tooltip = "Puxa peças soltas e arremessa jogadores.",
+    Callback = function(state) config.tornado = state end
+})
+
+TornadoGroup:AddSlider("RadiusSlider", {
+    Text = "Raio",
+    Default = 15,
+    Min = 5,
+    Max = 50,
+    Rounding = 0,
+    Callback = function(val) config.radius = val end
+})
+
+TornadoGroup:AddSlider("HeightSlider", {
+    Text = "Altura",
+    Default = 10,
+    Min = 0,
+    Max = 40,
+    Rounding = 0,
+    Callback = function(val) config.height = val end
+})
+
+TornadoGroup:AddSlider("SpeedSlider", {
+    Text = "Velocidade",
+    Default = 8,
+    Min = 1,
+    Max = 25,
+    Rounding = 0,
+    Callback = function(val) config.speed = val end
+})
+
+TornadoGroup:AddSlider("MaxPartsSlider", {
+    Text = "Máximo de Peças",
+    Default = 150,
+    Min = 20,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(val) config.maxParts = val end
+})
+
+TornadoGroup:AddButton({
+    Text = "Soltar Peças",
+    Func = function()
+        for part in pairs(capturedParts) do detachPart(part) end
+        capturedParts = {}
+    end
+})
+
+-- Aba do Jogador
+local PlayerGroup = Tabs.Main:AddRightGroupbox("Jogador")
+
+PlayerGroup:AddToggle("FlyToggle", {
+    Text = "Voo (Fly)",
+    Default = false,
+    Callback = function(state)
+        config.fly = state
+        if state then startFly() else stopFly() end
+    end
+})
+
+PlayerGroup:AddSlider("FlySpeedSlider", {
+    Text = "Velocidade do Voo",
+    Default = 50,
+    Min = 10,
+    Max = 150,
+    Rounding = 0,
+    Callback = function(val) config.flySpeed = val end
+})
+
+PlayerGroup:AddToggle("GodToggle", {
+    Text = "God Mode",
+    Default = false,
+    Callback = function(state)
+        config.god = state
+        if state then startGod() else stopGod() end
+    end
+})
+
+-- =====================================================================
+-- BOTÕES MOBILE DE VOO (SUBIR/DESCER)
+-- =====================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TornadoMobileFly"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+local function makeFlyBtn(text, yPos, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 60, 0, 60)
+    btn.Position = UDim2.new(1, -140, 0.5, yPos)
+    btn.BackgroundColor3 = color
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 24
+    btn.Parent = ScreenGui
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    return btn
+end
+
+local upBtn = makeFlyBtn("⬆️", -70, Color3.fromRGB(0, 150, 0))
+local downBtn = makeFlyBtn("⬇️", 0, Color3.fromRGB(150, 0, 0))
+
+upBtn.MouseButton1Down:Connect(function() flyHoldingUp = true end)
+upBtn.MouseButton1Up:Connect(function() flyHoldingUp = false end)
+upBtn.MouseLeave:Connect(function() flyHoldingUp = false end)
+
+downBtn.MouseButton1Down:Connect(function() flyHoldingDown = true end)
+downBtn.MouseButton1Up:Connect(function() flyHoldingDown = false end)
+downBtn.MouseLeave:Connect(function() flyHoldingDown = false end)
+
+-- Respawn handling
+player.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    if config.god then startGod() end
+    if config.fly then stopFly(); startFly() end
+end)then h.Health = math.huge end
     end)
 end
 
