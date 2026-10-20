@@ -30,7 +30,7 @@ local flyConnection, godConnection
 
 -- ============ MENU ============
 local Window = Library:CreateWindow({
-    Title = "Tornado + Fly + God | NDS",
+    Title = "eu amo o hitler w",
     Footer = "Mobile Ready 📱",
     Icon = 95816097006870,
     NotifySide = "Right",
@@ -332,6 +332,19 @@ function stopGod()
     local char = player.Character
     if char then
         local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.MaxHealth = 100
+            humanoid.Health = 100
+        end
+    end
+end
+
+-- ============ NOTIFICAÇÃO FINAL ============
+Library:Notify({
+    Title = "hitler hub carregado w",
+    Description = "Menu carregado! Fly e God prontos para mobile.",
+    Time = 4,
+})hildOfClass("Humanoid")
         if humanoid then
             humanoid.MaxHealth = 100
             humanoid.Health = 100
